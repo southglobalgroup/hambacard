@@ -1,1 +1,282 @@
-hello
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#147d72">
+  <meta name="description" content="A patient-held clinic record that travels with you in a QR code.">
+  <title>HambaCard — Your health, with you</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css">
+  <style>
+    :root {
+      --pico-font-size: 100%;
+      --pico-primary: #147d72;
+      --pico-primary-hover: #10665d;
+      --pico-primary-focus: rgba(20, 125, 114, .22);
+      --pico-primary-background: #147d72;
+      --pico-primary-hover-background: #10665d;
+      --pico-primary-border: #147d72;
+      --pico-primary-hover-border: #10665d;
+      --pico-border-radius: 1rem;
+      --ink: #153b39;
+      --muted: #58716f;
+      --wash: #f2f8f6;
+    }
+
+    body { background: var(--wash); color: var(--ink); min-height: 100vh; }
+    main { width: min(100% - 1.25rem, 42rem); margin: 0 auto; padding: 1rem 0 2.5rem; }
+    header { text-align: center; padding: .8rem 0 1.1rem; }
+    .brand { display: inline-flex; align-items: center; gap: .55rem; color: var(--ink); font-size: 1.55rem; font-weight: 800; letter-spacing: -.04em; text-decoration: none; }
+    .brand-mark { display: grid; width: 2.35rem; height: 2.35rem; place-items: center; border-radius: .8rem; color: white; background: #147d72; font-size: 1.15rem; }
+    header p { color: var(--muted); margin: .45rem 0 0; font-size: .95rem; }
+    article { border: 1px solid #e1ece9; box-shadow: 0 8px 28px rgba(21, 59, 57, .06); padding: clamp(1rem, 4vw, 1.7rem); }
+    h1, h2, h3 { color: var(--ink); }
+    h1 { font-size: clamp(1.45rem, 5vw, 1.9rem); margin-bottom: .35rem; }
+    .intro { color: var(--muted); margin-bottom: 1.4rem; }
+    label { color: var(--ink); font-weight: 650; }
+    input, textarea { background-color: #fff; }
+    textarea { min-height: 5.5rem; resize: vertical; }
+    .field-hint { display: block; color: var(--muted); font-size: .82rem; font-weight: 400; margin-top: -.5rem; }
+    button { width: 100%; font-weight: 700; }
+    .privacy-note { color: var(--muted); font-size: .82rem; text-align: center; margin: .9rem 0 0; }
+    [hidden] { display: none !important; }
+
+    .qr-view { text-align: center; }
+    .qr-view h1 { margin-bottom: .5rem; }
+    .qr-help { color: var(--muted); margin-bottom: 1rem; }
+    .qr-frame { width: min(100%, 20rem); min-height: 20rem; margin: 0 auto .65rem; display: grid; place-items: center; padding: .75rem; background: white; border: 1px solid #dce9e6; border-radius: 1rem; }
+    #qrcode { display: grid; place-items: center; max-width: 100%; }
+    #qrcode canvas, #qrcode img { display: block; max-width: 100%; height: auto; }
+    .save-hint { color: var(--muted); font-size: .9rem; margin-bottom: 1.2rem; }
+    .qr-link { display: inline-block; font-size: .9rem; overflow-wrap: anywhere; margin: 0 0 1.3rem; }
+
+    .patient-card { overflow: hidden; }
+    .patient-head { border-bottom: 1px solid #e5eeec; padding-bottom: 1rem; margin-bottom: 1.1rem; }
+    .patient-head h1 { margin-bottom: .2rem; overflow-wrap: anywhere; }
+    .patient-age { color: var(--muted); margin: 0; }
+    .allergy-box { background: #fff0ef; border: 1px solid #edb6b2; border-left: .35rem solid #c62828; border-radius: .7rem; padding: .9rem 1rem; margin: 1rem 0 1.25rem; }
+    .allergy-box h2 { color: #a51f1f; font-size: 1.05rem; margin: 0 0 .35rem; }
+    .allergy-box p { color: #701c1c; margin: 0; font-weight: 600; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .details { display: grid; gap: .9rem; margin: 0 0 1.3rem; }
+    .details > div { border-bottom: 1px solid #e8efed; padding-bottom: .75rem; }
+    .details dt { color: var(--muted); font-size: .83rem; font-weight: 700; margin-bottom: .2rem; }
+    .details dd { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+    .refill-status { border-radius: .75rem; padding: .9rem 1rem; font-weight: 750; margin: 1rem 0 1.3rem; }
+    .refill-status.overdue { color: #9c1c1c; background: #fff0ef; border: 1px solid #edb6b2; }
+    .refill-status.upcoming { color: #17613a; background: #edf8f0; border: 1px solid #b8dfc5; }
+    .refill-status.unknown { color: #536562; background: #f2f5f4; border: 1px solid #dce5e2; }
+    footer { color: var(--muted); text-align: center; font-size: .8rem; padding-top: 1rem; }
+
+    @media (min-width: 600px) {
+      main { padding-top: 1.5rem; }
+      .details { grid-template-columns: 1fr 1fr; column-gap: 1.2rem; }
+      .details > div:last-child { grid-column: 1 / -1; }
+    }
+  </style>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
+  <script defer>
+    document.addEventListener('DOMContentLoaded', () => {
+      const formView = document.getElementById('form-view');
+      const qrView = document.getElementById('qr-view');
+      const cardView = document.getElementById('card-view');
+      const form = document.getElementById('record-form');
+      const qrHolder = document.getElementById('qrcode');
+      const qrLink = document.getElementById('qr-link');
+
+      const fields = {
+        name: 'n', dob: 'd', conditions: 'c', medicines: 'm',
+        allergies: 'a', result: 'r', refill: 'f', clinic: 'l'
+      };
+
+      function readHash() {
+        const raw = location.hash.slice(1);
+        if (!raw) return null;
+        try {
+          const params = new URLSearchParams(raw);
+          const record = {};
+          for (const [field, key] of Object.entries(fields)) record[field] = params.get(key) || '';
+          return record.name || record.dob || record.conditions || record.medicines || record.allergies || record.result || record.refill || record.clinic ? record : null;
+        } catch (_) {
+          return null;
+        }
+      }
+
+      function setText(id, value, fallback = 'Not provided') {
+        document.getElementById(id).textContent = value.trim() || fallback;
+      }
+
+      function ageFromDate(dateString) {
+        if (!dateString) return 'Age not provided';
+        const parts = dateString.split('-').map(Number);
+        if (parts.length !== 3 || parts.some(Number.isNaN)) return 'Age unavailable';
+        const [year, month, day] = parts;
+        const today = new Date();
+        let age = today.getFullYear() - year;
+        if (today.getMonth() + 1 < month || (today.getMonth() + 1 === month && today.getDate() < day)) age--;
+        if (age < 0 || !Number.isFinite(age)) return 'Age unavailable';
+        return `${age} ${age === 1 ? 'year' : 'years'} old`;
+      }
+
+      function refillInfo(dateString) {
+        if (!dateString) return { text: 'Refill date not provided', style: 'unknown' };
+        const [year, month, day] = dateString.split('-').map(Number);
+        if (!year || !month || !day) return { text: 'Refill date unavailable', style: 'unknown' };
+        const today = new Date();
+        const todayUtc = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate());
+        const refillUtc = Date.UTC(year, month - 1, day);
+        const days = Math.round((refillUtc - todayUtc) / 86400000);
+        if (days < 0) {
+          const overdue = Math.abs(days);
+          return { text: `Refill ${overdue} ${overdue === 1 ? 'day' : 'days'} overdue: risk of treatment break`, style: 'overdue' };
+        }
+        return { text: `Refill due in ${days} ${days === 1 ? 'day' : 'days'}`, style: 'upcoming' };
+      }
+
+      function showPatientCard(record) {
+        formView.hidden = true;
+        qrView.hidden = true;
+        cardView.hidden = false;
+        setText('card-name', record.name);
+        document.getElementById('card-age').textContent = ageFromDate(record.dob);
+        setText('card-allergies', record.allergies);
+        setText('card-conditions', record.conditions);
+        setText('card-medicines', record.medicines);
+        setText('card-result', record.result);
+        setText('card-clinic', record.clinic);
+        const status = refillInfo(record.refill);
+        const statusElement = document.getElementById('card-refill');
+        statusElement.textContent = status.text;
+        statusElement.className = `refill-status ${status.style}`;
+      }
+
+      function showQr(url) {
+        formView.hidden = true;
+        cardView.hidden = true;
+        qrView.hidden = false;
+        qrHolder.replaceChildren();
+        qrLink.href = url;
+        qrLink.textContent = url;
+        if (typeof QRCode === 'undefined') {
+          document.getElementById('qr-error').hidden = false;
+          return;
+        }
+        document.getElementById('qr-error').hidden = true;
+        new QRCode(qrHolder, {
+          text: url,
+          width: 280,
+          height: 280,
+          colorDark: '#153b39',
+          colorLight: '#ffffff',
+          correctLevel: QRCode.CorrectLevel.LOW
+        });
+      }
+
+      function startNewCard() {
+        history.replaceState(null, '', location.pathname + location.search);
+        form.reset();
+        qrHolder.replaceChildren();
+        cardView.hidden = true;
+        qrView.hidden = true;
+        formView.hidden = false;
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
+
+      document.getElementById('new-from-qr').addEventListener('click', startNewCard);
+      document.getElementById('new-from-card').addEventListener('click', startNewCard);
+
+      form.addEventListener('submit', event => {
+        event.preventDefault();
+        if (!form.reportValidity()) return;
+        const data = new FormData(form);
+        const params = new URLSearchParams();
+        for (const [field, key] of Object.entries(fields)) params.set(key, String(data.get(field) || '').trim());
+        const url = `${location.href.split('#')[0]}#${params.toString()}`;
+        history.replaceState(null, '', url);
+        showQr(url);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      });
+
+      const existing = readHash();
+      if (existing) showPatientCard(existing);
+      else formView.hidden = false;
+    });
+  </script>
+</head>
+<body>
+  <main>
+    <header>
+      <a class="brand" href="#" aria-label="HambaCard home"><span class="brand-mark" aria-hidden="true">＋</span> HambaCard</a>
+      <p>Your health information, with you.</p>
+    </header>
+
+    <section id="form-view" hidden>
+      <article>
+        <h1>Make your HambaCard</h1>
+        <p class="intro">Create a simple, patient-held clinic record that can travel with you.</p>
+        <form id="record-form">
+          <label for="name">Full name</label>
+          <input id="name" name="name" type="text" autocomplete="name" maxlength="120" required>
+
+          <label for="dob">Date of birth</label>
+          <input id="dob" name="dob" type="date" autocomplete="bday" required>
+
+          <label for="conditions">Conditions</label>
+          <textarea id="conditions" name="conditions" maxlength="500" placeholder="For example: asthma, diabetes"></textarea>
+
+          <label for="medicines">Medicines</label>
+          <textarea id="medicines" name="medicines" maxlength="500" placeholder="Include medicine names and doses if known"></textarea>
+
+          <label for="allergies">Allergies</label>
+          <textarea id="allergies" name="allergies" maxlength="500" placeholder="List allergies, or write “None known”"></textarea>
+
+          <label for="result">Last result</label>
+          <textarea id="result" name="result" maxlength="500" placeholder="A recent test result or important clinic note"></textarea>
+
+          <label for="refill">Next refill date</label>
+          <input id="refill" name="refill" type="date" required>
+
+          <label for="clinic">Clinic name</label>
+          <input id="clinic" name="clinic" type="text" maxlength="120" placeholder="Where you receive care">
+
+          <button type="submit">Make HambaCard</button>
+          <p class="privacy-note">Your details are stored in this page's link, not sent to a server. Anyone with the link or QR code can read them.</p>
+        </form>
+      </article>
+    </section>
+
+    <section id="qr-view" class="qr-view" hidden>
+      <article>
+        <h1>Your HambaCard QR code</h1>
+        <p class="qr-help">Save this code and show it at a clinic.</p>
+        <div class="qr-frame"><div id="qrcode" role="img" aria-label="QR code for your HambaCard"></div></div>
+        <p class="save-hint">Long-press to save</p>
+        <p id="qr-error" hidden>QR code could not be loaded. Check your internet connection and try again.</p>
+        <a id="qr-link" class="qr-link" href="#"></a>
+        <button id="new-from-qr" type="button" class="secondary">Make a new card</button>
+      </article>
+    </section>
+
+    <section id="card-view" hidden>
+      <article class="patient-card">
+        <div class="patient-head">
+          <h1 id="card-name"></h1>
+          <p id="card-age" class="patient-age"></p>
+        </div>
+        <section class="allergy-box" aria-labelledby="allergy-heading">
+          <h2 id="allergy-heading">Allergies</h2>
+          <p id="card-allergies"></p>
+        </section>
+        <dl class="details">
+          <div><dt>Conditions</dt><dd id="card-conditions"></dd></div>
+          <div><dt>Medicines</dt><dd id="card-medicines"></dd></div>
+          <div><dt>Last result</dt><dd id="card-result"></dd></div>
+          <div><dt>Clinic</dt><dd id="card-clinic"></dd></div>
+        </dl>
+        <p id="card-refill" class="refill-status"></p>
+        <button id="new-from-card" type="button">Make a new card</button>
+      </article>
+    </section>
+    <footer>HambaCard is a patient-held record and does not replace professional medical advice.</footer>
+  </main>
+</body>
+</html>
